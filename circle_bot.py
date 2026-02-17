@@ -171,6 +171,9 @@ class LenkTools:
         # Hotkeys enabled state
         self.hotkeys_enabled = True
 
+        # Forge options enabled (I, O, P, U)
+        self.forge_enabled = True
+
         # Radial menu state
         self._radial_menu = None
         self._radial_items = [
@@ -178,6 +181,8 @@ class LenkTools:
              'state': lambda: self.hotkeys_enabled},
             {'label': 'Sprint', 'icon': '\U0001f3c3', 'toggle': lambda: self.toggle_sprint(force=True),
              'state': lambda: self.sprint_enabled},
+            {'label': 'Forge', 'icon': '\U0001f525', 'toggle': self._toggle_forge,
+             'state': lambda: self.forge_enabled},
             {'label': 'Mini', 'icon': '\u25CB', 'toggle': self._toggle_mini_mode,
              'state': lambda: self._mini_mode},
         ]
@@ -220,10 +225,10 @@ class LenkTools:
 
         # Hotkeys (rebindable)
         self._hotkey_map = {
-            'circle':      {'key': 'p',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle()},
-            'jiggle':      {'key': 'i',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_jiggle()},
-            'bar_game':    {'key': 'o',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self._handle_o()},
-            'auto_phase':  {'key': 'u',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_auto_phase()},
+            'circle':      {'key': 'p',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.forge_enabled and self.toggle()},
+            'jiggle':      {'key': 'i',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.forge_enabled and self.toggle_jiggle()},
+            'bar_game':    {'key': 'o',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.forge_enabled and self._handle_o()},
+            'auto_phase':  {'key': 'u',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.forge_enabled and self.toggle_auto_phase()},
             'autoclicker': {'key': 'f5', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_autoclicker()},
             'hold_left':   {'key': 'f6', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_holding_left()},
             'sprint':      {'key': 'caps lock', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_sprint()},
@@ -258,6 +263,19 @@ class LenkTools:
             self.hotkey_btn.config(text='Hotkeys: OFF', fg='#ff5555',
                                    activeforeground='#ff5555')
         print(f"[HOTKEYS] {'ON' if self.hotkeys_enabled else 'OFF'}")
+
+    # ------------------------------------------------------ Forge toggle
+    def _toggle_forge(self):
+        self.forge_enabled = not self.forge_enabled
+        if not self.forge_enabled:
+            # Turn off all forge features when disabling
+            self.active = False
+            self.jiggling = False
+            self.bar_game = False
+            self.bar_shaping = False
+            self.auto_phase = False
+        self.root.after(0, self._refresh_gui)
+        print(f"[FORGE] {'ON' if self.forge_enabled else 'OFF'}")
 
     # ------------------------------------------------------ Mini mode
     def _toggle_mini_mode(self):
@@ -929,6 +947,8 @@ class LenkTools:
     # ------------------------------------------------ Pipeline node click handler
     def _on_node_click(self, idx):
         """Handle click on a pipeline node to toggle its phase."""
+        if not self.forge_enabled:
+            return
         self.auto_phase = False  # manual click overrides auto-phase
         if idx == 0:  # Smelting -> jiggle
             if self.jiggling:
@@ -1256,6 +1276,8 @@ class LenkTools:
 
     # ---------------------------------------------------- Auto-Phase / GO
     def toggle_auto_phase(self, force=False):
+        if not self.forge_enabled:
+            return
         if not force and not self._roblox_focused():
             return
         if self.auto_phase:
@@ -1573,14 +1595,7 @@ class LenkTools:
                 tag, '<Leave>',
                 lambda e: self.pipe_canvas.config(cursor=''))
 
-        # ---- Separator ----
-        tk.Frame(self.root, bg=BORDER, height=1).pack(
-            fill='x', padx=16, pady=(6, 0))
-
-        # ---- Extra controls ----
-        ctrl = tk.Frame(self.root, bg=BG)
-        ctrl.pack(pady=(8, 0), fill='x', padx=20)
-
+        # ---- Shared helper for control rows ----
         def _ctrl_row(parent, text, key_text, command=None):
             """Create a control row: dot + label + right-aligned key hint."""
             row = tk.Frame(parent, bg=BG)
@@ -1600,9 +1615,21 @@ class LenkTools:
                     widget.config(cursor='hand2')
             return dot, lbl, hint
 
+        # ---- Auto-Phase (belongs with forge pipeline) ----
+        phase_frame = tk.Frame(self.root, bg=BG)
+        phase_frame.pack(fill='x', padx=20, pady=(2, 0))
         self._phase_dot, self.phase_lbl, self._phase_hint = _ctrl_row(
-            ctrl, 'Auto-Phase: OFF', '[U]',
+            phase_frame, 'Auto-Phase: OFF', '[U]',
             lambda: self.toggle_auto_phase(force=True))
+
+        # ---- Separator ----
+        tk.Frame(self.root, bg=BORDER, height=1).pack(
+            fill='x', padx=16, pady=(6, 0))
+
+        # ---- Extra controls ----
+        ctrl = tk.Frame(self.root, bg=BG)
+        ctrl.pack(pady=(8, 0), fill='x', padx=20)
+
         self._autoclick_dot, self.autoclick_lbl, self._autoclick_hint = _ctrl_row(
             ctrl, 'Autoclick: OFF', '[F5]',
             lambda: self.toggle_autoclicker(force=True))
