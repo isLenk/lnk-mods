@@ -199,13 +199,19 @@ class LenkTools:
         self.auto_phase = False
         self.phase_idx = 0  # 0=jiggle, 1=bar_game, 2=circle
 
-        # Hotkeys
-        keyboard.on_press_key('p', lambda _: self.hotkeys_enabled and self.toggle())
-        keyboard.on_press_key('i', lambda _: self.hotkeys_enabled and self.toggle_jiggle())
-        keyboard.on_press_key('o', lambda _: self.hotkeys_enabled and self._handle_o())
-        keyboard.on_press_key('u', lambda _: self.hotkeys_enabled and self.toggle_auto_phase())
-        keyboard.on_press_key('f5', lambda _: self.hotkeys_enabled and self.toggle_autoclicker())
-        keyboard.on_press_key('f6', lambda _: self.hotkeys_enabled and self.toggle_holding_left())
+        # Hotkeys (rebindable)
+        self._hotkey_map = {
+            'circle':      {'key': 'p',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle()},
+            'jiggle':      {'key': 'i',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_jiggle()},
+            'bar_game':    {'key': 'o',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self._handle_o()},
+            'auto_phase':  {'key': 'u',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_auto_phase()},
+            'autoclicker': {'key': 'f5', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_autoclicker()},
+            'hold_left':   {'key': 'f6', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_holding_left()},
+        }
+        for entry in self._hotkey_map.values():
+            entry['hook'] = keyboard.on_press_key(entry['key'], entry['callback'])
+        self._capturing_hotkey = None  # name of hotkey currently being rebound
+        self._hotkey_ui = {}  # filled in _build_gui: name -> {'type': 'label'|'canvas', 'widget': ...}
         keyboard.on_press_key('enter', lambda _: self.hotkeys_enabled and self._handle_enter())
         self._macro_f9_hotkey_id = keyboard.add_hotkey('f9', self._macro_hotkey_dispatch)
 
@@ -1185,12 +1191,31 @@ class LenkTools:
             self._pipe_keys.append(key_id)
 
         # Make pipeline nodes clickable
+        # Map pipeline indices to hotkey names (index 2 = Shaping has no hotkey)
+        _pipe_hotkey_names = {0: 'jiggle', 1: 'bar_game', 3: 'circle'}
         for i in range(4):
             tag = f'node_{i}'
             glow_id, circle_id = self._pipe_circles[i]
             for item_id in [glow_id, circle_id, self._pipe_icons[i],
-                            self._pipe_labels[i], self._pipe_keys[i]]:
+                            self._pipe_labels[i]]:
                 self.pipe_canvas.addtag_withtag(tag, item_id)
+            # Key text: rebindable keys get their own tag, others join the node
+            if i in _pipe_hotkey_names:
+                key_tag = f'key_{i}'
+                self.pipe_canvas.addtag_withtag(key_tag, self._pipe_keys[i])
+                self.pipe_canvas.tag_bind(
+                    key_tag, '<Button-1>',
+                    lambda e, n=_pipe_hotkey_names[i]: self._start_key_rebind(n))
+                self.pipe_canvas.tag_bind(
+                    key_tag, '<Enter>',
+                    lambda e: self.pipe_canvas.config(cursor='hand2'))
+                self.pipe_canvas.tag_bind(
+                    key_tag, '<Leave>',
+                    lambda e: self.pipe_canvas.config(cursor=''))
+                self._hotkey_ui[_pipe_hotkey_names[i]] = {
+                    'type': 'canvas', 'item_id': self._pipe_keys[i]}
+            else:
+                self.pipe_canvas.addtag_withtag(tag, self._pipe_keys[i])
             self.pipe_canvas.tag_bind(
                 tag, '<Button-1>',
                 lambda e, idx=i: self._on_node_click(idx))
@@ -1226,17 +1251,26 @@ class LenkTools:
                 for widget in (dot, lbl, row):
                     widget.bind('<Button-1>', lambda e, cmd=command: cmd())
                     widget.config(cursor='hand2')
-            return dot, lbl
+            return dot, lbl, hint
 
-        self._phase_dot, self.phase_lbl = _ctrl_row(
+        self._phase_dot, self.phase_lbl, self._phase_hint = _ctrl_row(
             ctrl, 'Auto-Phase: OFF', '[U]',
             lambda: self.toggle_auto_phase(force=True))
-        self._autoclick_dot, self.autoclick_lbl = _ctrl_row(
+        self._autoclick_dot, self.autoclick_lbl, self._autoclick_hint = _ctrl_row(
             ctrl, 'Autoclick: OFF', '[F5]',
             lambda: self.toggle_autoclicker(force=True))
-        self._holdleft_dot, self.holdleft_lbl = _ctrl_row(
+        self._holdleft_dot, self.holdleft_lbl, self._holdleft_hint = _ctrl_row(
             ctrl, 'Hold Left: OFF', '[F6]',
             lambda: self.toggle_holding_left(force=True))
+
+        # Make control-row hint labels clickable for rebinding
+        for hotkey_name, hint_widget in [('auto_phase', self._phase_hint),
+                                          ('autoclicker', self._autoclick_hint),
+                                          ('hold_left', self._holdleft_hint)]:
+            hint_widget.config(cursor='hand2')
+            hint_widget.bind('<Button-1>',
+                             lambda e, n=hotkey_name: self._start_key_rebind(n))
+            self._hotkey_ui[hotkey_name] = {'type': 'label', 'widget': hint_widget}
 
         # ---- Periodic Attack sub-section ----
         pa_frame = tk.Frame(self.root, bg=BG)
@@ -2573,6 +2607,59 @@ class LenkTools:
         self._save_macros()
         self._refresh_saved_list()
         print(f"[MACRO] Deleted '{name}'")
+
+    # ------------------------------------------------ Hotkey Rebinding
+    def _start_key_rebind(self, hotkey_name):
+        """Enter 'press any key' capture mode for a rebindable hotkey."""
+        if self._capturing_hotkey is not None:
+            return
+        self._capturing_hotkey = hotkey_name
+        ui = self._hotkey_ui[hotkey_name]
+        if ui['type'] == 'label':
+            ui['widget'].config(text='Press key...', fg='#f0c674')
+        else:
+            self.pipe_canvas.itemconfig(ui['item_id'],
+                                        text='Press key...', fill='#f0c674')
+        self._rebind_hook_id = keyboard.on_press(
+            self._on_key_rebind_capture, suppress=False)
+
+    def _on_key_rebind_capture(self, event):
+        """Handle a key press during hotkey rebinding."""
+        new_key = event.name
+        keyboard.unhook(self._rebind_hook_id)
+        name = self._capturing_hotkey
+        self._capturing_hotkey = None
+        self.root.after(0, lambda: self._apply_key_rebind(name, new_key))
+
+    def _apply_key_rebind(self, hotkey_name, new_key):
+        """Apply the captured key rebind on the main thread."""
+        entry = self._hotkey_map[hotkey_name]
+        old_key = entry['key']
+        display = new_key.upper()
+        ui = self._hotkey_ui[hotkey_name]
+        if new_key == old_key:
+            # Same key — just restore the display
+            if ui['type'] == 'label':
+                ui['widget'].config(text=f'[{display}]', fg='#30363d')
+            else:
+                self.pipe_canvas.itemconfig(ui['item_id'],
+                                            text=f'[{display}]', fill='#30363d')
+            return
+        # Unhook old key
+        try:
+            keyboard.unhook(entry['hook'])
+        except Exception:
+            pass
+        # Update state
+        entry['key'] = new_key
+        entry['hook'] = keyboard.on_press_key(new_key, entry['callback'])
+        # Update UI
+        if ui['type'] == 'label':
+            ui['widget'].config(text=f'[{display}]', fg='#30363d')
+        else:
+            self.pipe_canvas.itemconfig(ui['item_id'],
+                                        text=f'[{display}]', fill='#30363d')
+        print(f"[HOTKEY] '{hotkey_name}' rebound: {old_key} -> {new_key}")
 
     # ------------------------------------------------ Macro Hotkey Capture
     def _start_hotkey_capture(self):
