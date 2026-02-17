@@ -134,7 +134,7 @@ del "%~f0"
 
     subprocess.Popen(
         ["cmd.exe", "/c", bat_path],
-        creationflags=0x00000008,  # DETACHED_PROCESS
+        creationflags=0x08000000,  # CREATE_NO_WINDOW
     )
     sys.exit(0)
 

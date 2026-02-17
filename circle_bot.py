@@ -351,6 +351,8 @@ class LenkTools:
 
         # Collect active features: (name, color)
         features = []
+        if not self.forge_enabled:
+            features.append(('Forge OFF', '#ff5555'))
         if self.jiggling:
             features.append(('Smelting', '#50fa7b'))
         if self.bar_game and not self.bar_shaping:
@@ -1609,6 +1611,13 @@ class LenkTools:
                 tag, '<Leave>',
                 lambda e: self.pipe_canvas.config(cursor=''))
 
+        # "FORGE OFF" overlay (hidden by default)
+        self._forge_off_overlay = self.pipe_canvas.create_text(
+            pipe_w // 2, cy, text='FORGE OFF',
+            font=('Consolas', 18, 'bold'), fill='#ff5555',
+            state='hidden'
+        )
+
         # ---- Shared helper for control rows ----
         def _ctrl_row(parent, text, key_text, command=None):
             """Create a control row: dot + label + right-aligned key hint."""
@@ -1954,40 +1963,55 @@ class LenkTools:
             self.bar_shaping,
             self.active,
         ]
-        for i, is_on in enumerate(states):
-            glow, circle = self._pipe_circles[i]
-            if is_on and self.auto_phase:
-                # Active via auto-phase -> yellow
-                self.pipe_canvas.itemconfig(glow, outline='#9e6a03', width=2)
-                self.pipe_canvas.itemconfig(circle, fill='#2d1b00', outline='#f0c040')
-                self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#f0c040')
-                self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#f0c040')
-                self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#9e6a03')
-            elif is_on and i == 2:
-                # Shaping -> cyan
-                self.pipe_canvas.itemconfig(glow, outline='#1f6feb', width=2)
-                self.pipe_canvas.itemconfig(circle, fill='#0d1b3d', outline='#58a6ff')
-                self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#58a6ff')
-                self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#58a6ff')
-                self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#1f6feb')
-            elif is_on:
-                # Manually active -> green
-                self.pipe_canvas.itemconfig(glow, outline='#238636', width=2)
-                self.pipe_canvas.itemconfig(circle, fill='#0d4429', outline='#50fa7b')
-                self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#50fa7b')
-                self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#c9d1d9')
-                self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#238636')
-            else:
-                # Inactive
+
+        if not self.forge_enabled:
+            # Forge globally disabled — dim everything with red tint
+            for i in range(4):
+                glow, circle = self._pipe_circles[i]
                 self.pipe_canvas.itemconfig(glow, outline='', width=0)
-                self.pipe_canvas.itemconfig(circle, fill='#161b22', outline='#30363d')
-                self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#484f58')
-                self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#484f58')
-                self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#30363d')
+                self.pipe_canvas.itemconfig(circle, fill='#1a0a0a', outline='#3d1f1f')
+                self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#3d1f1f')
+                self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#3d1f1f')
+                self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#2a1515')
+            self.pipe_canvas.itemconfig(self._forge_off_overlay, state='normal')
+        else:
+            self.pipe_canvas.itemconfig(self._forge_off_overlay, state='hidden')
+            for i, is_on in enumerate(states):
+                glow, circle = self._pipe_circles[i]
+                if is_on and self.auto_phase:
+                    # Active via auto-phase -> yellow
+                    self.pipe_canvas.itemconfig(glow, outline='#9e6a03', width=2)
+                    self.pipe_canvas.itemconfig(circle, fill='#2d1b00', outline='#f0c040')
+                    self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#f0c040')
+                    self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#f0c040')
+                    self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#9e6a03')
+                elif is_on and i == 2:
+                    # Shaping -> cyan
+                    self.pipe_canvas.itemconfig(glow, outline='#1f6feb', width=2)
+                    self.pipe_canvas.itemconfig(circle, fill='#0d1b3d', outline='#58a6ff')
+                    self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#58a6ff')
+                    self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#58a6ff')
+                    self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#1f6feb')
+                elif is_on:
+                    # Manually active -> green
+                    self.pipe_canvas.itemconfig(glow, outline='#238636', width=2)
+                    self.pipe_canvas.itemconfig(circle, fill='#0d4429', outline='#50fa7b')
+                    self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#50fa7b')
+                    self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#c9d1d9')
+                    self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#238636')
+                else:
+                    # Inactive
+                    self.pipe_canvas.itemconfig(glow, outline='', width=0)
+                    self.pipe_canvas.itemconfig(circle, fill='#161b22', outline='#30363d')
+                    self.pipe_canvas.itemconfig(self._pipe_icons[i], fill='#484f58')
+                    self.pipe_canvas.itemconfig(self._pipe_labels[i], fill='#484f58')
+                    self.pipe_canvas.itemconfig(self._pipe_keys[i], fill='#30363d')
 
         # ---- Connecting lines ----
         for line in self._pipe_lines:
-            if self.auto_phase:
+            if not self.forge_enabled:
+                self.pipe_canvas.itemconfig(line, fill='#2a1515')
+            elif self.auto_phase:
                 self.pipe_canvas.itemconfig(line, fill='#f0c040')
             else:
                 self.pipe_canvas.itemconfig(line, fill='#21262d')
