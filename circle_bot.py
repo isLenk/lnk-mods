@@ -11,6 +11,7 @@ Controls:
   U       - Toggle auto-phase (Smelting -> Casting -> Welding, advances on GO screen)
   F5      - Toggle autoclicker (clicks every 0.1s)
   F6      - Toggle hold left arrow key
+  CapsLock - Toggle sprint (holds LeftShift while WASD pressed)
   Close the GUI window to exit
 
 All modes only activate when Roblox is focused.
@@ -164,8 +165,26 @@ class LenkTools:
         # Hold-left-arrow state
         self.holding_left = False
 
+        # Sprint state (hold LeftShift while WASD pressed)
+        self.sprint_enabled = False
+
         # Hotkeys enabled state
         self.hotkeys_enabled = True
+
+        # Radial menu state
+        self._radial_menu = None
+        self._radial_items = [
+            {'label': 'Hotkeys', 'icon': '\u2328', 'toggle': self._toggle_hotkeys,
+             'state': lambda: self.hotkeys_enabled},
+            {'label': 'Sprint', 'icon': '\U0001f3c3', 'toggle': lambda: self.toggle_sprint(force=True),
+             'state': lambda: self.sprint_enabled},
+            {'label': 'Mini', 'icon': '\u25CB', 'toggle': self._toggle_mini_mode,
+             'state': lambda: self._mini_mode},
+        ]
+
+        # Mini mode state
+        self._mini_mode = False
+        self._mini_win = None
 
         # Macro editor state
         self.macro_panel_open = False
@@ -207,6 +226,7 @@ class LenkTools:
             'auto_phase':  {'key': 'u',  'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_auto_phase()},
             'autoclicker': {'key': 'f5', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_autoclicker()},
             'hold_left':   {'key': 'f6', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_holding_left()},
+            'sprint':      {'key': 'caps lock', 'hook': None, 'callback': lambda _: self.hotkeys_enabled and self.toggle_sprint()},
         }
         for entry in self._hotkey_map.values():
             entry['hook'] = keyboard.on_press_key(entry['key'], entry['callback'])
@@ -225,6 +245,7 @@ class LenkTools:
         Thread(target=self._go_detector_loop, daemon=True).start()
         Thread(target=self._autoclicker_loop, daemon=True).start()
         Thread(target=self._hold_left_loop, daemon=True).start()
+        Thread(target=self._sprint_loop, daemon=True).start()
         Thread(target=self._periodic_attack_loop, daemon=True).start()
 
     # ------------------------------------------------------ Hotkeys toggle
@@ -237,6 +258,298 @@ class LenkTools:
             self.hotkey_btn.config(text='Hotkeys: OFF', fg='#ff5555',
                                    activeforeground='#ff5555')
         print(f"[HOTKEYS] {'ON' if self.hotkeys_enabled else 'OFF'}")
+
+    # ------------------------------------------------------ Mini mode
+    def _toggle_mini_mode(self):
+        self._mini_mode = not self._mini_mode
+        if self._mini_mode:
+            self.root.withdraw()
+            self._build_mini_win()
+        else:
+            self._destroy_mini_win()
+            self.root.deiconify()
+        print(f"[MINI] {'ON' if self._mini_mode else 'OFF'}")
+
+    def _build_mini_win(self):
+        BG = '#0d1117'
+        CIRCLE_SIZE = 36
+        TRANSPARENT = '#010101'
+
+        win = tk.Toplevel()
+        win.overrideredirect(True)
+        win.attributes('-topmost', True)
+        win.attributes('-transparentcolor', TRANSPARENT)
+        win.configure(bg=TRANSPARENT)
+
+        # Position at the old main-window location
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+
+        # Canvas for the draggable circle
+        cvs = tk.Canvas(win, width=CIRCLE_SIZE, height=CIRCLE_SIZE,
+                        bg=TRANSPARENT, highlightthickness=0)
+        cvs.pack(side=tk.LEFT)
+        # Outer glow
+        cvs.create_oval(1, 1, CIRCLE_SIZE - 1, CIRCLE_SIZE - 1,
+                        outline='#238636', width=2, fill=BG)
+        # Inner icon
+        cvs.create_text(CIRCLE_SIZE // 2, CIRCLE_SIZE // 2,
+                        text='L', font=('Consolas', 13, 'bold'), fill='#50fa7b')
+
+        # Floating labels frame (right of circle)
+        lbl_frame = tk.Frame(win, bg=TRANSPARENT)
+        lbl_frame.pack(side=tk.LEFT, padx=(4, 0))
+
+        self._mini_labels = {}
+        self._mini_lbl_frame = lbl_frame
+        self._mini_win = win
+        self._mini_cvs = cvs
+
+        # Dragging
+        def _start_drag(event):
+            self._mini_drag_x = event.x_root - win.winfo_x()
+            self._mini_drag_y = event.y_root - win.winfo_y()
+
+        def _on_drag(event):
+            nx = event.x_root - self._mini_drag_x
+            ny = event.y_root - self._mini_drag_y
+            win.geometry(f"+{nx}+{ny}")
+
+        for w in (cvs,):
+            w.bind('<Button-1>', _start_drag)
+            w.bind('<B1-Motion>', _on_drag)
+
+        # Double-click to restore full GUI
+        cvs.bind('<Double-Button-1>', lambda e: self._toggle_mini_mode())
+
+        win.geometry(f"+{x}+{y}")
+        self._refresh_mini()
+
+    def _refresh_mini(self):
+        """Update the floating labels to show only active features."""
+        if not self._mini_mode or not self._mini_win:
+            return
+        TRANSPARENT = '#010101'
+
+        # Collect active features: (name, color)
+        features = []
+        if self.jiggling:
+            features.append(('Smelting', '#50fa7b'))
+        if self.bar_game and not self.bar_shaping:
+            features.append(('Casting', '#50fa7b'))
+        if self.bar_shaping:
+            features.append(('Shaping', '#58a6ff'))
+        if self.active:
+            features.append(('Welding', '#50fa7b'))
+        if self.auto_phase:
+            features.append(('Auto-Phase', '#f0c040'))
+        if self.autoclicker:
+            features.append(('Autoclick', '#50fa7b'))
+        if self.holding_left:
+            features.append(('Hold Left', '#50fa7b'))
+        if self.sprint_enabled:
+            features.append(('Sprint', '#50fa7b'))
+        if self.periodic_attack:
+            features.append(('Periodic', '#bd93f9'))
+
+        # Rebuild labels only when the set of active features changes
+        active_keys = tuple((n, c) for n, c in features)
+        if hasattr(self, '_mini_last_keys') and self._mini_last_keys == active_keys:
+            return
+        self._mini_last_keys = active_keys
+
+        # Clear old labels
+        for w in self._mini_lbl_frame.winfo_children():
+            w.destroy()
+
+        for name, color in features:
+            tk.Label(self._mini_lbl_frame, text=name,
+                     font=('Consolas', 9, 'bold'), fg=color,
+                     bg=TRANSPARENT).pack(anchor='w')
+
+        # Resize the window to fit
+        self._mini_win.update_idletasks()
+        w = self._mini_cvs.winfo_reqwidth() + self._mini_lbl_frame.winfo_reqwidth() + 4
+        h = max(self._mini_cvs.winfo_reqheight(),
+                self._mini_lbl_frame.winfo_reqheight(), 36)
+        x = self._mini_win.winfo_x()
+        y = self._mini_win.winfo_y()
+        self._mini_win.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _destroy_mini_win(self):
+        if self._mini_win:
+            self._mini_win.destroy()
+            self._mini_win = None
+            self._mini_labels = {}
+            if hasattr(self, '_mini_last_keys'):
+                del self._mini_last_keys
+
+    # ---------------------------------------------------- Radial menu
+    def _poll_middle_click(self):
+        """Poll for middle mouse button press via GetAsyncKeyState."""
+        VK_MBUTTON = 0x04
+        state = ctypes.windll.user32.GetAsyncKeyState(VK_MBUTTON)
+        if state & 0x0001:  # pressed since last poll
+            pt = ctypes.wintypes.POINT()
+            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+            try:
+                self._open_radial_menu(pt.x, pt.y)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+        if self.running:
+            self.root.after(50, self._poll_middle_click)
+
+    def _open_radial_menu(self, mx, my):
+        """Open a radial menu centered on the mouse cursor."""
+        print(f"[RADIAL] Middle-click at ({mx}, {my})")
+        if self._radial_menu is not None:
+            self._close_radial_menu()
+            return
+
+        TRANS = '#010101'
+        BG_RING = '#161b22'
+        BORDER = '#21262d'
+
+        outer_r = 80
+        inner_r = 30
+        hover_pad = 15  # extra hit area beyond drawn ring
+        pad = 5 + hover_pad
+        size = (outer_r + pad) * 2
+        c = size // 2
+
+        menu = tk.Toplevel(self.root)
+        menu.overrideredirect(True)
+        menu.attributes('-topmost', True)
+        menu.attributes('-transparentcolor', TRANS)
+        menu.configure(bg=TRANS)
+        menu.geometry(f'{size}x{size}+{mx - c}+{my - c}')
+
+        canvas = tk.Canvas(menu, width=size, height=size,
+                           bg=TRANS, highlightthickness=0)
+        canvas.pack()
+
+        items = self._radial_items
+        n = len(items)
+        seg = 360.0 / n
+
+        # Invisible hover zone — #020202 is 1 shade off transparent key,
+        # visually identical but catches mouse events for approach detection
+        HOVER_ZONE = '#020202'
+        hr = outer_r + hover_pad
+        canvas.create_oval(
+            c - hr, c - hr, c + hr, c + hr,
+            fill=HOVER_ZONE, outline='', width=0)
+
+        # Arc segments (clockwise from top)
+        arc_ids = []
+        for i in range(n):
+            # Clamp extent to avoid degenerate -360 arc that draws nothing
+            ext = max(-seg, -359.99)
+            arc = canvas.create_arc(
+                c - outer_r, c - outer_r, c + outer_r, c + outer_r,
+                start=90 - i * seg, extent=ext,
+                fill=BG_RING, outline=BORDER, width=2, style='pieslice')
+            arc_ids.append(arc)
+
+        # Inner circle (donut hole)
+        canvas.create_oval(
+            c - inner_r, c - inner_r, c + inner_r, c + inner_r,
+            fill=HOVER_ZONE, outline=BORDER, width=2)
+
+        # Icons on each segment
+        icon_ids = []
+        for i, item in enumerate(items):
+            theta = np.radians((i + 0.5) * seg)
+            r_mid = (outer_r + inner_r) / 2
+            ix = c + r_mid * np.sin(theta)
+            iy = c - r_mid * np.cos(theta)
+            on = item['state']()
+            icon_id = canvas.create_text(
+                ix, iy, text=item['icon'],
+                font=('Segoe UI Symbol', 20), fill='#50fa7b' if on else '#ff5555')
+            icon_ids.append(icon_id)
+
+        # Center label
+        center_lbl = canvas.create_text(
+            c, c, text='', font=('Consolas', 10, 'bold'), fill='#8b949e')
+
+        self._radial_menu = menu
+        self._radial_data = {
+            'canvas': canvas, 'arc_ids': arc_ids, 'icon_ids': icon_ids,
+            'center_lbl': center_lbl, 'c': c,
+            'outer_r': outer_r + hover_pad, 'inner_r': max(inner_r - hover_pad, 5),
+            'seg': seg, 'hovered': -1,
+        }
+
+        canvas.bind('<Motion>', self._radial_on_motion)
+        canvas.bind('<Leave>', self._radial_on_leave)
+        canvas.bind('<Button-1>', self._radial_on_click)
+        menu.bind('<Escape>', lambda e: self._close_radial_menu())
+        menu.bind('<Button-2>', lambda e: self._close_radial_menu())
+        menu.bind('<FocusOut>',
+                  lambda e: self.root.after(50, self._close_radial_menu))
+        menu.focus_force()
+
+    def _radial_segment_at(self, x, y):
+        """Return the segment index at canvas coords (x, y), or -1."""
+        d = self._radial_data
+        dx = x - d['c']
+        dy = y - d['c']
+        dist = (dx * dx + dy * dy) ** 0.5
+        if dist < d['inner_r'] or dist > d['outer_r']:
+            return -1
+        angle = np.degrees(np.arctan2(dx, -dy)) % 360
+        return min(int(angle / d['seg']), len(self._radial_items) - 1)
+
+    def _radial_on_motion(self, event):
+        """Highlight the hovered segment."""
+        if self._radial_menu is None:
+            return
+        d = self._radial_data
+        idx = self._radial_segment_at(event.x, event.y)
+        if idx == d['hovered']:
+            return
+        canvas = d['canvas']
+        if d['hovered'] >= 0:
+            canvas.itemconfig(d['arc_ids'][d['hovered']], fill='#161b22')
+        if idx >= 0:
+            canvas.itemconfig(d['arc_ids'][idx], fill='#30363d')
+            canvas.itemconfig(d['center_lbl'],
+                              text=self._radial_items[idx]['label'])
+        else:
+            canvas.itemconfig(d['center_lbl'], text='')
+        d['hovered'] = idx
+
+    def _radial_on_leave(self, event):
+        """Clear highlight when the mouse leaves the ring."""
+        if self._radial_menu is None:
+            return
+        d = self._radial_data
+        if d['hovered'] >= 0:
+            d['canvas'].itemconfig(d['arc_ids'][d['hovered']], fill='#161b22')
+            d['canvas'].itemconfig(d['center_lbl'], text='')
+            d['hovered'] = -1
+
+    def _radial_on_click(self, event):
+        """Execute the clicked segment's action and close the menu."""
+        if self._radial_menu is None:
+            return
+        idx = self._radial_segment_at(event.x, event.y)
+        self._close_radial_menu()
+        if 0 <= idx < len(self._radial_items):
+            self._radial_items[idx]['toggle']()
+
+    def _close_radial_menu(self):
+        """Close the radial menu."""
+        if self._radial_menu is None:
+            return
+        try:
+            self._radial_menu.destroy()
+        except tk.TclError:
+            pass
+        self._radial_menu = None
+        self._radial_data = None
 
     # --------------------------------------------------------- Hotkey helpers
     def _handle_o(self):
@@ -687,6 +1000,39 @@ class LenkTools:
                     was_holding = False
                 time.sleep(0.05)
 
+    # --------------------------------------------------------------- Sprint
+    _SCAN_LSHIFT = 0x2A  # scan code for Left Shift
+    _WASD_VK = (0x57, 0x41, 0x53, 0x44)  # virtual-key codes for W, A, S, D
+
+    def toggle_sprint(self, force=False):
+        if not force and not self._roblox_focused():
+            return
+        self.sprint_enabled = not self.sprint_enabled
+        if not self.sprint_enabled:
+            self._send_key(self._SCAN_LSHIFT, key_up=True)
+        self.root.after(0, self._refresh_gui)
+        print(f"[SPRINT] {'ON' if self.sprint_enabled else 'OFF'}")
+
+    def _sprint_loop(self):
+        """Hold LeftShift while any WASD key is pressed and sprint is enabled."""
+        GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
+        shift_held = False
+        while self.running:
+            if self.sprint_enabled and self._roblox_focused():
+                wasd_pressed = any(GetAsyncKeyState(vk) & 0x8000
+                                   for vk in self._WASD_VK)
+                if wasd_pressed and not shift_held:
+                    self._send_key(self._SCAN_LSHIFT, key_up=False)
+                    shift_held = True
+                elif not wasd_pressed and shift_held:
+                    self._send_key(self._SCAN_LSHIFT, key_up=True)
+                    shift_held = False
+            else:
+                if shift_held:
+                    self._send_key(self._SCAN_LSHIFT, key_up=True)
+                    shift_held = False
+            time.sleep(0.02)
+
     # --------------------------------------------------------------- Jiggle
     def toggle_jiggle(self, force=False):
         if not force and not self._roblox_focused():
@@ -1026,6 +1372,7 @@ class LenkTools:
         self.root.attributes('-topmost', True)
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
+        self.root.after(50, self._poll_middle_click)
 
         # ---- Dotted background pattern ----
         W, H = 350, 530
@@ -1262,11 +1609,15 @@ class LenkTools:
         self._holdleft_dot, self.holdleft_lbl, self._holdleft_hint = _ctrl_row(
             ctrl, 'Hold Left: OFF', '[F6]',
             lambda: self.toggle_holding_left(force=True))
+        self._sprint_dot, self.sprint_lbl, self._sprint_hint = _ctrl_row(
+            ctrl, 'Sprint: OFF', '[CapsLk]',
+            lambda: self.toggle_sprint(force=True))
 
         # Make control-row hint labels clickable for rebinding
         for hotkey_name, hint_widget in [('auto_phase', self._phase_hint),
                                           ('autoclicker', self._autoclick_hint),
-                                          ('hold_left', self._holdleft_hint)]:
+                                          ('hold_left', self._holdleft_hint),
+                                          ('sprint', self._sprint_hint)]:
             hint_widget.config(cursor='hand2')
             hint_widget.bind('<Button-1>',
                              lambda e, n=hotkey_name: self._start_key_rebind(n))
@@ -1313,12 +1664,16 @@ class LenkTools:
                  fg=DIM, bg=BG).pack(side=tk.LEFT)
 
         self._pa_key1_var = tk.StringVar(value='2')
+        keycap1_outer = tk.Frame(sword_col, bg='#484f58')
+        keycap1_outer.pack(pady=(4, 0), anchor='w', padx=(4, 0))
+        keycap1_inner = tk.Frame(keycap1_outer, bg='#30363d')
+        keycap1_inner.pack(padx=1, pady=(1, 2))
         pa_key1_entry = tk.Entry(
-            sword_col, textvariable=self._pa_key1_var,
-            width=2, font=('Consolas', 10, 'bold'),
-            fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
-            bd=1, relief='flat', justify='center')
-        pa_key1_entry.pack(pady=(2, 0))
+            keycap1_inner, textvariable=self._pa_key1_var,
+            width=2, font=('Consolas', 11, 'bold'),
+            fg='#c9d1d9', bg='#161b22', insertbackground='#58a6ff',
+            bd=0, relief='flat', justify='center')
+        pa_key1_entry.pack(padx=3, pady=2)
 
         # --- Pickaxe column (key2) ---
         pick_col = tk.Frame(pa_cols, bg=BG)
@@ -1339,12 +1694,16 @@ class LenkTools:
                  fg=DIM, bg=BG).pack(side=tk.LEFT)
 
         self._pa_key2_var = tk.StringVar(value='1')
+        keycap2_outer = tk.Frame(pick_col, bg='#484f58')
+        keycap2_outer.pack(pady=(4, 0), anchor='w', padx=(4, 0))
+        keycap2_inner = tk.Frame(keycap2_outer, bg='#30363d')
+        keycap2_inner.pack(padx=1, pady=(1, 2))
         pa_key2_entry = tk.Entry(
-            pick_col, textvariable=self._pa_key2_var,
-            width=2, font=('Consolas', 10, 'bold'),
-            fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
-            bd=1, relief='flat', justify='center')
-        pa_key2_entry.pack(pady=(2, 0))
+            keycap2_inner, textvariable=self._pa_key2_var,
+            width=2, font=('Consolas', 11, 'bold'),
+            fg='#c9d1d9', bg='#161b22', insertbackground='#58a6ff',
+            bd=0, relief='flat', justify='center')
+        pa_key2_entry.pack(padx=3, pady=2)
 
         # Sync key entries to state
         def _on_key1_change(*_):
@@ -1622,12 +1981,22 @@ class LenkTools:
             self.holdleft_lbl.config(text='Hold Left: OFF', fg='#484f58')
             self._holdleft_dot.config(fg='#ff5555')
 
+        if self.sprint_enabled:
+            self.sprint_lbl.config(text='Sprint: ON', fg='#50fa7b')
+            self._sprint_dot.config(fg='#50fa7b')
+        else:
+            self.sprint_lbl.config(text='Sprint: OFF', fg='#484f58')
+            self._sprint_dot.config(fg='#ff5555')
+
         if self.periodic_attack:
             self.pa_lbl.config(text='Periodic Attack: ON', fg='#bd93f9')
             self._pa_dot.config(fg='#bd93f9')
         else:
             self.pa_lbl.config(text='Periodic Attack: OFF', fg='#484f58')
             self._pa_dot.config(fg='#ff5555')
+
+        # ---- Mini mode labels ----
+        self._refresh_mini()
 
     # ----------------------------------------------------------- Detection
     def _find_targets(self, hsv, lo, hi):
@@ -1902,7 +2271,7 @@ class LenkTools:
         root_w = self.root.winfo_width()
 
         panel = tk.Toplevel(self.root)
-        panel.title("Macro Editor")
+        panel.overrideredirect(True)
         panel.geometry(f"380x520+{root_x + root_w + 10}+{root_y}")
         panel.attributes('-topmost', True)
         panel.resizable(False, False)
@@ -1918,29 +2287,82 @@ class LenkTools:
             self.macro_panel = None
             panel.destroy()
 
-        panel.protocol("WM_DELETE_WINDOW", on_close)
+        # ---- Dotted background pattern ----
+        MW, MH = 380, 520
+        DOT_SPACING = 18
+        DOT_COLOR = '#1a1f27'
+        self._macro_bg_img = tk.PhotoImage(width=MW, height=MH)
+        self._macro_bg_img.put(BG, to=(0, 0, MW, MH))
+        for y in range(0, MH, DOT_SPACING):
+            for x in range(0, MW, DOT_SPACING):
+                self._macro_bg_img.put(DOT_COLOR, to=(x, y, x + 2, y + 2))
+        tk.Label(panel, image=self._macro_bg_img, bd=0
+                 ).place(x=0, y=0, relwidth=1, relheight=1)
 
-        # ---- Header ----
-        tk.Label(panel, text="MACRO EDITOR", font=("Consolas", 12, "bold"),
-                 fg=ACCENT, bg=BG2, pady=6).pack(fill='x')
+        # ---- Custom title bar ----
+        titlebar = tk.Frame(panel, bg=BG, height=30)
+        titlebar.pack(fill='x')
+        titlebar.pack_propagate(False)
+
+        title_lbl = tk.Label(
+            titlebar, text="MACRO EDITOR",
+            font=("Consolas", 9, "bold"), fg=DIM, bg=BG)
+        title_lbl.pack(side=tk.LEFT, padx=10)
+
+        close_btn = tk.Label(
+            titlebar, text='\u2715', font=('Consolas', 10),
+            fg=DIM, bg=BG, padx=10, cursor='hand2')
+        close_btn.pack(side=tk.RIGHT, fill='y')
+        close_btn.bind('<Button-1>', lambda e: on_close())
+        close_btn.bind('<Enter>', lambda e: close_btn.config(fg='#ff5555', bg='#1a0000'))
+        close_btn.bind('<Leave>', lambda e: close_btn.config(fg=DIM, bg=BG))
+
+        def _start_drag_macro(event):
+            self._macro_drag_x = event.x
+            self._macro_drag_y = event.y
+
+        def _on_drag_macro(event):
+            x = panel.winfo_x() + event.x - self._macro_drag_x
+            y = panel.winfo_y() + event.y - self._macro_drag_y
+            panel.geometry(f"+{x}+{y}")
+
+        for w in (titlebar, title_lbl):
+            w.bind('<Button-1>', _start_drag_macro)
+            w.bind('<B1-Motion>', _on_drag_macro)
 
         # ---- Input toggles ----
         toggle_frame = tk.Frame(panel, bg=BG)
         toggle_frame.pack(fill='x', padx=12, pady=(8, 4))
 
+        _toggle_sz = 32
+        kb_wrap = tk.Frame(toggle_frame, bg=BORDER, width=_toggle_sz, height=_toggle_sz)
+        kb_wrap.pack(side=tk.LEFT, padx=(0, 6))
+        kb_wrap.pack_propagate(False)
         self._macro_kb_btn = tk.Button(
-            toggle_frame, text='Keyboard: ON', font=('Consolas', 9, 'bold'),
+            kb_wrap, text='\u2328', font=('Segoe UI Symbol', 14),
             fg=GREEN, bg=BORDER, activebackground='#30363d', activeforeground=GREEN,
-            bd=0, relief='flat', padx=8, pady=2,
+            bd=0, relief='flat',
             command=self._toggle_macro_kb)
-        self._macro_kb_btn.pack(side=tk.LEFT, padx=(0, 6))
+        self._macro_kb_btn.pack(fill='both', expand=True)
 
+        _mouse_fg = DIM if not mouse else RED
+        mouse_wrap = tk.Frame(toggle_frame, bg=BORDER, width=_toggle_sz, height=_toggle_sz)
+        mouse_wrap.pack(side=tk.LEFT)
+        mouse_wrap.pack_propagate(False)
         self._macro_mouse_btn = tk.Button(
-            toggle_frame, text='Mouse: OFF', font=('Consolas', 9, 'bold'),
-            fg=RED, bg=BORDER, activebackground='#30363d', activeforeground=RED,
-            bd=0, relief='flat', padx=8, pady=2,
-            command=self._toggle_macro_mouse)
-        self._macro_mouse_btn.pack(side=tk.LEFT)
+            mouse_wrap, text='\U0001f5b1', font=('Segoe UI Emoji', 12),
+            fg=_mouse_fg, bg=BORDER, activebackground='#30363d',
+            activeforeground=_mouse_fg,
+            bd=0, relief='flat',
+            command=self._toggle_macro_mouse,
+            state='normal' if mouse else 'disabled',
+            disabledforeground=DIM)
+        self._macro_mouse_btn.pack(fill='both', expand=True)
+
+        if not mouse:
+            _tip = tk.Label(toggle_frame, text='pip install mouse',
+                            font=('Consolas', 8), fg='#484f58', bg=BG)
+            _tip.pack(side=tk.LEFT, padx=(6, 0))
 
         # ---- Record row ----
         rec_frame = tk.Frame(panel, bg=BG)
@@ -2097,11 +2519,9 @@ class LenkTools:
         self.macro_record_kb = not self.macro_record_kb
         if self.macro_panel:
             if self.macro_record_kb:
-                self._macro_kb_btn.config(text='Keyboard: ON', fg='#50fa7b',
-                                           activeforeground='#50fa7b')
+                self._macro_kb_btn.config(fg='#50fa7b', activeforeground='#50fa7b')
             else:
-                self._macro_kb_btn.config(text='Keyboard: OFF', fg='#ff5555',
-                                           activeforeground='#ff5555')
+                self._macro_kb_btn.config(fg='#ff5555', activeforeground='#ff5555')
 
     def _toggle_macro_mouse(self):
         if not mouse:
@@ -2110,11 +2530,9 @@ class LenkTools:
         self.macro_record_mouse = not self.macro_record_mouse
         if self.macro_panel:
             if self.macro_record_mouse:
-                self._macro_mouse_btn.config(text='Mouse: ON', fg='#50fa7b',
-                                              activeforeground='#50fa7b')
+                self._macro_mouse_btn.config(fg='#50fa7b', activeforeground='#50fa7b')
             else:
-                self._macro_mouse_btn.config(text='Mouse: OFF', fg='#ff5555',
-                                              activeforeground='#ff5555')
+                self._macro_mouse_btn.config(fg='#ff5555', activeforeground='#ff5555')
 
     def _toggle_macro_loop(self):
         self.macro_looping = not self.macro_looping
@@ -2719,6 +3137,7 @@ class LenkTools:
             self._stop_replay()
         if self.holding_left:
             self._send_key(self._SCAN_LEFT, key_up=True, extended=True)
+        self._destroy_mini_win()
         keyboard.unhook_all()
         try:
             mouse.unhook_all()
