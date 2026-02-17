@@ -1195,16 +1195,29 @@ class LenkTools:
         self._auto_sell_overlays = []
 
     def _click_at_screen(self, x, y):
-        """Click at an absolute screen position."""
+        """Smoothly drag the cursor to (x, y) then click."""
+        # Get current cursor position
+        pt = ctypes.wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        sx, sy = pt.x, pt.y
+
+        # Interpolate from current position to target
+        steps = 20
+        duration = 0.15  # seconds for the drag
+        for i in range(1, steps + 1):
+            t = i / steps
+            ix = sx + (x - sx) * t
+            iy = sy + (y - sy) * t
+            abs_x = int((ix - self._virt_left) * 65535 / (self._virt_w - 1))
+            abs_y = int((iy - self._virt_top) * 65535 / (self._virt_h - 1))
+            self._send_mouse(0x8000 | 0x4000 | 0x0001, abs_x, abs_y)
+            time.sleep(duration / steps)
+
+        # Click at final position
         abs_x = int((x - self._virt_left) * 65535 / (self._virt_w - 1))
         abs_y = int((y - self._virt_top) * 65535 / (self._virt_h - 1))
-        # Move to position
-        self._send_mouse(0x8000 | 0x4000 | 0x0001, abs_x, abs_y)
-        time.sleep(0.05)
-        # Click down
         self._send_mouse(0x8000 | 0x4000 | 0x0002, abs_x, abs_y)
         time.sleep(0.03)
-        # Click up
         self._send_mouse(0x8000 | 0x4000 | 0x0004, abs_x, abs_y)
 
     def _execute_auto_sell(self):
@@ -2429,7 +2442,10 @@ class LenkTools:
             self.phase_lbl.config(text='Auto-Phase: OFF', fg='#484f58')
             self._phase_dot.config(fg='#ff5555')
 
-        if self.autoclicker:
+        if self.autoclicker and self._auto_sell_executing:
+            self.autoclick_lbl.config(text='Autoclick: PAUSED', fg='#f0c040')
+            self._autoclick_dot.config(fg='#f0c040')
+        elif self.autoclicker:
             self.autoclick_lbl.config(text='Autoclick: ON', fg='#50fa7b')
             self._autoclick_dot.config(fg='#50fa7b')
         else:
