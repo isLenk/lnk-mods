@@ -34,6 +34,7 @@ import json
 import os
 import glob
 import re
+from version import VERSION
 try:
     import mouse
 except ImportError:
@@ -1018,7 +1019,7 @@ class LenkTools:
         DIM = '#484f58'
 
         self.root = tk.Tk()
-        self.root.title("LENK.TOOLS")
+        self.root.title(f"LENK.TOOLS v{VERSION}")
         self.root.geometry("350x530+10+10")
         self.root.attributes('-topmost', True)
         self.root.resizable(False, False)
@@ -1208,59 +1209,61 @@ class LenkTools:
             w.bind('<Button-1>', lambda e: self.toggle_periodic_attack())
             w.config(cursor='hand2')
 
-        # Circle 1 row: key entry + interval slider
-        c1_frame = tk.Frame(pa_frame, bg=BG)
-        c1_frame.pack(fill='x', pady=(2, 0), padx=(14, 0))
-        tk.Label(c1_frame, text='\u2460', font=('Segoe UI', 10),
-                 fg=DIM, bg=BG).pack(side=tk.LEFT)
-        tk.Label(c1_frame, text='Key', font=('Consolas', 9),
-                 fg=DIM, bg=BG).pack(side=tk.LEFT, padx=(4, 2))
-        self._pa_key1_var = tk.StringVar(value='2')
-        self._pa_key1_entry = tk.Entry(
-            c1_frame, textvariable=self._pa_key1_var,
-            width=2, font=('Consolas', 10, 'bold'),
+        # Two-column layout: sword | pickaxe
+        pa_cols = tk.Frame(pa_frame, bg=BG)
+        pa_cols.pack(fill='x', pady=(2, 0), padx=(14, 0))
+
+        # --- Sword column (key1) ---
+        sword_col = tk.Frame(pa_cols, bg=BG)
+        sword_col.pack(side=tk.LEFT, expand=True, fill='x')
+
+        sword_top = tk.Frame(sword_col, bg=BG)
+        sword_top.pack()
+        tk.Label(sword_top, text='\u2694', font=('Segoe UI', 16),
+                 fg='#ff5555', bg=BG).pack(side=tk.LEFT)
+        self._pa_time1_var = tk.StringVar(value='1.0')
+        pa_time1_entry = tk.Entry(
+            sword_top, textvariable=self._pa_time1_var,
+            width=4, font=('Consolas', 10, 'bold'),
             fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
             bd=1, relief='flat', justify='center')
-        self._pa_key1_entry.pack(side=tk.LEFT, padx=2)
-        self._pa_int1_var = tk.DoubleVar(value=3.0)
-        self._pa_int1_scale = tk.Scale(
-            c1_frame, from_=0.5, to=15.0, resolution=0.5,
-            orient='horizontal', variable=self._pa_int1_var,
-            length=130, width=12, font=('Consolas', 8),
-            fg=DIM, bg=BG, troughcolor=BG2,
-            activebackground='#58a6ff', highlightthickness=0,
-            bd=0, sliderrelief='flat', showvalue=True,
-            command=lambda v: setattr(self, 'periodic_interval1', float(v)))
-        self._pa_int1_scale.pack(side=tk.LEFT, padx=(4, 0))
-        tk.Label(c1_frame, text='s', font=('Consolas', 9),
+        pa_time1_entry.pack(side=tk.LEFT, padx=(4, 0))
+        tk.Label(sword_top, text='s', font=('Consolas', 9),
                  fg=DIM, bg=BG).pack(side=tk.LEFT)
 
-        # Circle 2 row: key entry + delay slider
-        c2_frame = tk.Frame(pa_frame, bg=BG)
-        c2_frame.pack(fill='x', pady=(0, 0), padx=(14, 0))
-        tk.Label(c2_frame, text='\u2461', font=('Segoe UI', 10),
-                 fg=DIM, bg=BG).pack(side=tk.LEFT)
-        tk.Label(c2_frame, text='Key', font=('Consolas', 9),
-                 fg=DIM, bg=BG).pack(side=tk.LEFT, padx=(4, 2))
-        self._pa_key2_var = tk.StringVar(value='1')
-        self._pa_key2_entry = tk.Entry(
-            c2_frame, textvariable=self._pa_key2_var,
+        self._pa_key1_var = tk.StringVar(value='2')
+        pa_key1_entry = tk.Entry(
+            sword_col, textvariable=self._pa_key1_var,
             width=2, font=('Consolas', 10, 'bold'),
             fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
             bd=1, relief='flat', justify='center')
-        self._pa_key2_entry.pack(side=tk.LEFT, padx=2)
-        self._pa_int2_var = tk.DoubleVar(value=1.0)
-        self._pa_int2_scale = tk.Scale(
-            c2_frame, from_=0.5, to=15.0, resolution=0.5,
-            orient='horizontal', variable=self._pa_int2_var,
-            length=130, width=12, font=('Consolas', 8),
-            fg=DIM, bg=BG, troughcolor=BG2,
-            activebackground='#58a6ff', highlightthickness=0,
-            bd=0, sliderrelief='flat', showvalue=True,
-            command=lambda v: setattr(self, 'periodic_delay2', float(v)))
-        self._pa_int2_scale.pack(side=tk.LEFT, padx=(4, 0))
-        tk.Label(c2_frame, text='s', font=('Consolas', 9),
+        pa_key1_entry.pack(pady=(2, 0))
+
+        # --- Pickaxe column (key2) ---
+        pick_col = tk.Frame(pa_cols, bg=BG)
+        pick_col.pack(side=tk.LEFT, expand=True, fill='x')
+
+        pick_top = tk.Frame(pick_col, bg=BG)
+        pick_top.pack()
+        tk.Label(pick_top, text='\u26CF', font=('Segoe UI', 16),
+                 fg='#50fa7b', bg=BG).pack(side=tk.LEFT)
+        self._pa_time2_var = tk.StringVar(value='2.0')
+        pa_time2_entry = tk.Entry(
+            pick_top, textvariable=self._pa_time2_var,
+            width=4, font=('Consolas', 10, 'bold'),
+            fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
+            bd=1, relief='flat', justify='center')
+        pa_time2_entry.pack(side=tk.LEFT, padx=(4, 0))
+        tk.Label(pick_top, text='s', font=('Consolas', 9),
                  fg=DIM, bg=BG).pack(side=tk.LEFT)
+
+        self._pa_key2_var = tk.StringVar(value='1')
+        pa_key2_entry = tk.Entry(
+            pick_col, textvariable=self._pa_key2_var,
+            width=2, font=('Consolas', 10, 'bold'),
+            fg='#58a6ff', bg=BG2, insertbackground='#58a6ff',
+            bd=1, relief='flat', justify='center')
+        pa_key2_entry.pack(pady=(2, 0))
 
         # Sync key entries to state
         def _on_key1_change(*_):
@@ -1279,6 +1282,24 @@ class LenkTools:
 
         self._pa_key1_var.trace_add('write', _on_key1_change)
         self._pa_key2_var.trace_add('write', _on_key2_change)
+
+        # Sync time entries to periodic state
+        def _sync_pa_times(*_):
+            try:
+                sword_t = float(self._pa_time1_var.get())
+            except ValueError:
+                return
+            try:
+                pick_t = float(self._pa_time2_var.get())
+            except ValueError:
+                return
+            if sword_t < 0.1 or pick_t < 0.1:
+                return
+            self.periodic_delay2 = sword_t
+            self.periodic_interval1 = sword_t + pick_t
+
+        self._pa_time1_var.trace_add('write', _sync_pa_times)
+        self._pa_time2_var.trace_add('write', _sync_pa_times)
 
         # ---- Hotkeys toggle button ----
         self.hotkey_btn = tk.Button(
@@ -1832,21 +1853,27 @@ class LenkTools:
         tk.Label(rec_frame, text='Hotkey:', font=('Consolas', 9),
                  fg=DIM, bg=BG).pack(side=tk.LEFT)
         self._macro_hotkey_var = tk.StringVar(value=self.macro_record_hotkey.upper())
-        hotkey_entry = tk.Entry(
-            rec_frame, textvariable=self._macro_hotkey_var,
-            width=5, font=('Consolas', 10, 'bold'),
-            fg=ACCENT, bg=BG2, insertbackground=ACCENT,
-            bd=1, relief='flat', justify='center')
-        hotkey_entry.pack(side=tk.LEFT, padx=4)
-        hotkey_entry.bind('<Return>', lambda e: self._update_record_hotkey())
-        hotkey_entry.bind('<FocusOut>', lambda e: self._update_record_hotkey())
+        self._hotkey_capture_btn = tk.Button(
+            rec_frame, text=self.macro_record_hotkey.upper(),
+            font=('Consolas', 10, 'bold'),
+            fg=ACCENT, bg=BG2, activebackground='#30363d', activeforeground=ACCENT,
+            bd=1, relief='flat', width=5, pady=0,
+            command=self._start_hotkey_capture)
+        self._hotkey_capture_btn.pack(side=tk.LEFT, padx=4)
 
         self._macro_mode_btn = tk.Button(
-            rec_frame, text='Record', font=('Consolas', 9, 'bold'),
-            fg=RED, bg=BG2, activebackground='#30363d', activeforeground=RED,
-            bd=1, relief='flat', padx=6, pady=1,
+            rec_frame, text='\u25cf Record \u25c0', font=('Consolas', 9, 'bold'),
+            fg='#0d1117', bg=RED, activebackground='#30363d', activeforeground=RED,
+            bd=0, relief='flat', padx=6, pady=1,
             command=self._toggle_hotkey_mode)
         self._macro_mode_btn.pack(side=tk.LEFT, padx=(2, 0))
+
+        self._macro_mode_btn2 = tk.Button(
+            rec_frame, text='\u25b6 Replay', font=('Consolas', 9, 'bold'),
+            fg=GREEN, bg=BG2, activebackground='#30363d', activeforeground=GREEN,
+            bd=0, relief='flat', padx=6, pady=1,
+            command=self._toggle_hotkey_mode)
+        self._macro_mode_btn2.pack(side=tk.LEFT, padx=(2, 0))
 
         self._macro_rec_btn = tk.Button(
             rec_frame, text='\u25cf Record', font=('Consolas', 10, 'bold'),
@@ -2006,16 +2033,24 @@ class LenkTools:
     # ----------------------------------------------- Macro Hotkey Mode
     def _toggle_hotkey_mode(self):
         """Switch the hotkey between record and replay mode."""
+        BG2 = '#161b22'
+        RED = '#ff5555'
+        GREEN = '#50fa7b'
+        DARK = '#0d1117'
         if self.macro_hotkey_mode == 'record':
             self.macro_hotkey_mode = 'replay'
             if self.macro_panel and hasattr(self, '_macro_mode_btn'):
-                self._macro_mode_btn.config(text='Replay', fg='#50fa7b',
-                                             activeforeground='#50fa7b')
+                self._macro_mode_btn.config(text='\u25cf Record', fg=RED, bg=BG2,
+                                             activeforeground=RED)
+                self._macro_mode_btn2.config(text='\u25b6 Replay \u25c0', fg=DARK, bg=GREEN,
+                                              activeforeground=GREEN)
         else:
             self.macro_hotkey_mode = 'record'
             if self.macro_panel and hasattr(self, '_macro_mode_btn'):
-                self._macro_mode_btn.config(text='Record', fg='#ff5555',
-                                             activeforeground='#ff5555')
+                self._macro_mode_btn.config(text='\u25cf Record \u25c0', fg=DARK, bg=RED,
+                                             activeforeground=RED)
+                self._macro_mode_btn2.config(text='\u25b6 Replay', fg=GREEN, bg=BG2,
+                                              activeforeground=GREEN)
         print(f"[MACRO] Hotkey mode: {self.macro_hotkey_mode}")
 
     def _macro_hotkey_dispatch(self):
@@ -2265,6 +2300,10 @@ class LenkTools:
             self._stop_recording()
         self._macro_replay_stop = False
         self.macro_replaying = True
+        # Hook keyboard/mouse to stop replay on any user input
+        self._replay_kb_hook = keyboard.on_press(self._on_replay_input, suppress=False)
+        if mouse:
+            self._replay_mouse_hook = mouse.on_click(lambda: self._on_replay_input(None))
         if self.macro_panel:
             self._macro_play_btn.config(text='\u25a0 Stop', fg='#ff5555',
                                          activeforeground='#ff5555')
@@ -2272,9 +2311,21 @@ class LenkTools:
         self._macro_replay_thread.start()
         print("[MACRO] Replay started")
 
+    def _on_replay_input(self, event):
+        """Stop replay when user presses any key or clicks mouse."""
+        if self.macro_replaying:
+            self.root.after(0, self._stop_replay)
+
     def _stop_replay(self):
         self._macro_replay_stop = True
         self.macro_replaying = False
+        # Unhook input listeners
+        if hasattr(self, '_replay_kb_hook'):
+            keyboard.unhook(self._replay_kb_hook)
+            del self._replay_kb_hook
+        if hasattr(self, '_replay_mouse_hook') and mouse:
+            mouse.unhook(self._replay_mouse_hook)
+            del self._replay_mouse_hook
         if self.macro_panel:
             self._macro_play_btn.config(text='\u25b6 Play', fg='#50fa7b',
                                          activeforeground='#50fa7b')
@@ -2461,16 +2512,28 @@ class LenkTools:
         self._refresh_saved_list()
         print(f"[MACRO] Deleted '{name}'")
 
-    # ------------------------------------------------ Macro Hotkey Update
-    def _update_record_hotkey(self):
-        """Update the recording hotkey from the entry field."""
-        if not hasattr(self, '_macro_hotkey_var'):
+    # ------------------------------------------------ Macro Hotkey Capture
+    def _start_hotkey_capture(self):
+        """Enter 'press any key' mode on the hotkey button."""
+        if getattr(self, '_hotkey_capturing', False):
             return
-        new_key = self._macro_hotkey_var.get().strip().lower()
-        if not new_key:
-            return
+        self._hotkey_capturing = True
+        self._hotkey_capture_btn.config(text='Press key...', fg='#f0c674')
+        self._hotkey_hook_id = keyboard.on_press(self._on_hotkey_capture, suppress=False)
+
+    def _on_hotkey_capture(self, event):
+        """Handle a key press during hotkey capture."""
+        new_key = event.name
+        keyboard.unhook(self._hotkey_hook_id)
+        self._hotkey_capturing = False
+        # Apply on the main thread
+        self.root.after(0, lambda: self._apply_captured_hotkey(new_key))
+
+    def _apply_captured_hotkey(self, new_key):
+        """Apply the captured hotkey on the main thread."""
         old_key = self.macro_record_hotkey
         if new_key == old_key:
+            self._hotkey_capture_btn.config(text=new_key.upper(), fg='#58a6ff')
             return
         # Unregister old hotkey
         try:
@@ -2479,6 +2542,7 @@ class LenkTools:
             pass
         self.macro_record_hotkey = new_key
         self._macro_hotkey_var.set(new_key.upper())
+        self._hotkey_capture_btn.config(text=new_key.upper(), fg='#58a6ff')
         # Register new hotkey
         try:
             self._macro_f9_hotkey_id = keyboard.add_hotkey(
