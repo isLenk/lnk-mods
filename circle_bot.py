@@ -1247,8 +1247,8 @@ class LenkTools:
                 ('t_key', None, 2.0),
                 ('click', 'sell_items', 2.0),
                 ('click', 'select_all', 2.0),
-                ('click', 'accept', 4.0),
-                ('click', 'yes', 2.0),
+                ('click', 'accept', 2.0),
+                ('click', 'yes', 4.0),
                 ('click', 'close', 2.0),
             ]
             for step_type, target, delay in steps:
