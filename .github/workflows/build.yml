@@ -1,0 +1,64 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller opencv-python numpy mss keyboard mouse
+
+      - name: Read version
+        id: version
+        shell: python
+        run: |
+          import os
+          with open("version.py") as f:
+              exec(f.read())
+          with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
+              gh.write(f"version={VERSION}\n")
+
+      - name: Build exe
+        run: pyinstaller --onefile --uac-admin --name LENK.TOOLS --noconsole circle_bot.py
+
+      - name: Check if release exists
+        id: check_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Delete existing release if version unchanged
+        if: steps.check_release.outputs.exists == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "v${{ steps.version.outputs.version }}" --yes --cleanup-tag
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "v${{ steps.version.outputs.version }}"
+          dist/LENK.TOOLS.exe
+          --title "LENK.TOOLS v${{ steps.version.outputs.version }}"
+          --notes "Auto-built from commit ${{ github.sha }}"
