@@ -11,7 +11,6 @@ Controls:
   U       - Toggle auto-phase (Smelting -> Casting -> Welding, advances on GO screen)
   F5      - Toggle autoclicker (clicks every 0.1s)
   F6      - Toggle hold left arrow key
-  Shift+O - Toggle debug view on/off
   Close the GUI window to exit
 
 All modes only activate when Roblox is focused.
@@ -235,11 +234,8 @@ class LenkTools:
 
     # --------------------------------------------------------- Hotkey helpers
     def _handle_o(self):
-        """O = bar game, Shift+O = debug."""
-        if keyboard.is_pressed('shift'):
-            self.toggle_debug()
-        else:
-            self.toggle_bar_game()
+        """O = bar game."""
+        self.toggle_bar_game()
 
     def _handle_enter(self):
         """Enter during auto-phase ready: move cursor to middle-bottom of screen."""
@@ -1238,9 +1234,6 @@ class LenkTools:
         self._autoclick_dot, self.autoclick_lbl = _ctrl_row(
             ctrl, 'Autoclick: OFF', '[F5]',
             lambda: self.toggle_autoclicker(force=True))
-        self._debug_dot, self.debug_lbl = _ctrl_row(
-            ctrl, 'Debug: OFF', '[Sh+O]',
-            self.toggle_debug)
         self._holdleft_dot, self.holdleft_lbl = _ctrl_row(
             ctrl, 'Hold Left: OFF', '[F6]',
             lambda: self.toggle_holding_left(force=True))
@@ -1375,7 +1368,16 @@ class LenkTools:
             padx=12, pady=4,
             command=self._toggle_macro_panel
         )
-        self.macro_btn.pack(side=tk.LEFT, expand=True, padx=(4, 8))
+        self.macro_btn.pack(side=tk.LEFT, expand=True, padx=(4, 4))
+
+        self.debug_btn = tk.Button(
+            bottom_frame, text='\U0001f41b', font=('Segoe UI Emoji', 10),
+            fg='#484f58', bg=BORDER, activebackground='#30363d',
+            activeforeground='#ff5555', bd=0, relief='flat',
+            padx=6, pady=4,
+            command=self.toggle_debug
+        )
+        self.debug_btn.pack(side=tk.LEFT, padx=(0, 8))
 
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
 
@@ -1575,11 +1577,9 @@ class LenkTools:
             self._autoclick_dot.config(fg='#ff5555')
 
         if self.debug:
-            self.debug_lbl.config(text='Debug: ON', fg='#50fa7b')
-            self._debug_dot.config(fg='#50fa7b')
+            self.debug_btn.config(fg='#50fa7b', activeforeground='#50fa7b')
         else:
-            self.debug_lbl.config(text='Debug: OFF', fg='#484f58')
-            self._debug_dot.config(fg='#ff5555')
+            self.debug_btn.config(fg='#484f58', activeforeground='#ff5555')
 
         if self.holding_left:
             self.holdleft_lbl.config(text='Hold Left: ON', fg='#50fa7b')
