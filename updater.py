@@ -24,7 +24,7 @@ _ASSETS = (Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS')
 
 from version import VERSION
 
-GITHUB_REPO = "isLenk/roblox-forge-scripts"
+GITHUB_REPO = "isLenk/lnk-mods"
 RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 EXE_NAME = "LENK.TOOLS.exe"
 
