@@ -4,6 +4,7 @@ __pycache__/
 build/
 dist/
 *.spec
+!LENK.TOOLS.spec
 *.exe
 agents.md
 ocr_tracker.py
