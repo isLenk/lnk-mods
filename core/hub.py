@@ -148,7 +148,7 @@ class GameHub:
     def _minimize(self):
         """Minimize to mini mode."""
         mod = self._active_mod
-        if mod and mod._window:
+        if mod and mod._window and mod._window.winfo_exists():
             x = mod._window.winfo_x()
             y = mod._window.winfo_y()
             mod._window.withdraw()
